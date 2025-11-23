@@ -1,0 +1,135 @@
+version: "2"
+
+run:
+  timeout: 5m
+  relative-path-mode: gomod
+  issues-exit-code: 1
+  tests: true
+
+output:
+  formats:
+    text:
+      print-linter-name: true
+      print-issued-lines: true
+      colors: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: true
+  exclude-dirs:
+    - trm/manager/mock
+    - sql/mock
+  exclude-use-default: false
+  exclude:
+    - ST1000 # package comment requirement
+  exclude-rules:
+    - linters:
+        - lll
+      source: "^//go:generate "
+    - linters:
+        - lll
+      source: "(?:http(s)?:\\/\\/)?[\\w.-]+(?:\\.[\\w\\.-]+)+[\\w\\-\\._~:/?#[\\]@!\\$&'\\(\\)\\*\\+,;=.]+"
+    - linters:
+        - lll
+      source: "// ?TODO "
+    - path: _test\.go
+      linters:
+        - staticcheck
+      text: "SA1029: should not use built-in type string as key for value; define your own type to avoid collisions"
+    - path: (.+/)?context\.go
+      linters:
+        - ireturn
+    - path: (.+/)?transaction\.go
+      linters:
+        - ireturn
+      source: \) Begin\(ctx
+    - path: (.+/)?settings\.go
+      linters:
+        - ireturn
+      source: "(?:EnrichBy|SetPropagation|SetCtxKey|CtxKey|SetCancelable|SetTimeout)"
+    - linters:
+        - gochecknoglobals
+      source: "DefaultCtxGetter"
+    - &internal_text
+      path: (^trm/internal|^internal)
+      text: "var-naming: don't use an underscore in package name"
+    - <<: *internal_text
+      text: "package-comments: should have a package comment"
+    - <<: *internal_text
+      text: "ST1003: should not use underscores in package names"
+    - path: (_test\.go|^trm/internal|^internal)
+      linters:
+        - funlen
+        - gochecknoglobals
+        - goconst
+        - gomnd
+        - containedctx
+        - err113
+        - errcheck
+        - nolintlint
+        - forcetypeassert
+
+linters:
+  disable-all: true
+  enable:
+    - asasalint
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - dogsled
+    - dupl
+    - durationcheck
+    - errchkjson
+    - errname
+    - errcheck
+    - errorlint
+    - exhaustive
+    - forcetypeassert
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - gomoddirectives
+    - goprintffuncname
+    - gosec
+    - importas
+    - interfacebloat
+    - ireturn
+    - lll
+    - makezero
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - nolintlint
+    - prealloc
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - gci
+  settings:
+    gofumpt:
+      extra-rules: true
+    gci:
+      sections:
+        - Standard
+        - Default
+        - Prefix(github.com/kir1l9x/avito-test-assignment)
+      no-inline-comments: false

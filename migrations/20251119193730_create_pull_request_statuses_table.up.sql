@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS pr_statuses (
+    id    SMALLSERIAL PRIMARY KEY,
+    name  TEXT NOT NULL UNIQUE
+);
+
+INSERT INTO pr_statuses (name)
+VALUES ('OPEN'),('MERGED') ON CONFLICT (name) DO NOTHING;

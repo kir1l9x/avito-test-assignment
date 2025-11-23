@@ -1,0 +1,528 @@
+openapi: 3.0.3
+info:
+  title: PR Reviewer Assignment Service (Test Task, Fall 2025)
+  version: "1.0.0"
+tags:
+  - name: Health
+  - name: Teams
+  - name: Users
+  - name: PullRequests
+  - name: Stats
+components:
+  parameters:
+    TeamNameQuery:
+      name: team_name
+      in: query
+      required: true
+      description: Уникальное имя команды
+      schema:
+        type: string
+        minLength: 1
+    UserIdQuery:
+      name: user_id
+      in: query
+      required: true
+      description: Идентификатор пользователя (формат u<number>)
+      schema:
+        type: string
+        pattern: "^u[0-9]+$"
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum:
+                - TEAM_EXISTS
+                - PR_EXISTS
+                - PR_MERGED
+                - NOT_ASSIGNED
+                - NO_CANDIDATE
+                - NOT_FOUND
+                - BAD_REQUEST
+                - INTERNAL
+            message:
+              type: string
+      example:
+        error:
+          code: NOT_FOUND
+          message: resource not found
+    TeamMember:
+      type: object
+      required:
+        - user_id
+        - username
+        - is_active
+      properties:
+        user_id:
+          type: string
+          pattern: "^u[0-9]+$"
+        username:
+          type: string
+        is_active:
+          type: boolean
+    Team:
+      type: object
+      required:
+        - team_name
+        - members
+      properties:
+        team_name:
+          type: string
+          minLength: 1
+        members:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/TeamMember"
+    User:
+      type: object
+      required:
+        - user_id
+        - username
+        - team_name
+        - is_active
+      properties:
+        user_id:
+          type: string
+        username:
+          type: string
+        team_name:
+          type: string
+        is_active:
+          type: boolean
+    PullRequest:
+      type: object
+      required:
+        - pull_request_id
+        - pull_request_name
+        - author_id
+        - status
+        - assigned_reviewers
+      properties:
+        pull_request_id:
+          type: string
+        pull_request_name:
+          type: string
+        author_id:
+          type: string
+        status:
+          type: string
+          enum: [OPEN, MERGED]
+        assigned_reviewers:
+          type: array
+          description: user_id назначенных ревьюеров (0..2)
+          maxItems: 2
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        mergedAt:
+          type: string
+          format: date-time
+          nullable: true
+    PullRequestShort:
+      type: object
+      required:
+        - pull_request_id
+        - pull_request_name
+        - author_id
+        - status
+      properties:
+        pull_request_id:
+          type: string
+        pull_request_name:
+          type: string
+        author_id:
+          type: string
+        status:
+          type: string
+          enum: [OPEN, MERGED]
+    UserReviewStat:
+      type: object
+      required:
+        - user_id
+        - review_count
+      properties:
+        user_id:
+          type: string
+        review_count:
+          type: integer
+          format: int64
+    AddTeamResponse:
+      type: object
+      properties:
+        team:
+          $ref: "#/components/schemas/Team"
+    GetTeamResponse:
+      $ref: "#/components/schemas/Team"
+    SetIsActiveRequest:
+      type: object
+      required:
+        - user_id
+        - is_active
+      properties:
+        user_id:
+          type: string
+        is_active:
+          type: boolean
+    SetIsActiveResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+    CreatePullRequestRequest:
+      type: object
+      required:
+        - pull_request_id
+        - pull_request_name
+        - author_id
+      properties:
+        pull_request_id:
+          type: string
+        pull_request_name:
+          type: string
+        author_id:
+          type: string
+    PullRequestResponse:
+      type: object
+      properties:
+        pr:
+          $ref: "#/components/schemas/PullRequest"
+    MergePullRequestRequest:
+      type: object
+      required:
+        - pull_request_id
+      properties:
+        pull_request_id:
+          type: string
+    ReassignPullRequestRequest:
+      type: object
+      required:
+        - pull_request_id
+        - old_user_id
+      properties:
+        pull_request_id:
+          type: string
+        old_user_id:
+          type: string
+    ReassignPullRequestResponse:
+      type: object
+      required:
+        - pr
+        - replaced_by
+      properties:
+        pr:
+          $ref: "#/components/schemas/PullRequest"
+        replaced_by:
+          type: string
+          description: user_id нового ревьювера
+    UsersReviewsResponse:
+      type: object
+      required:
+        - user_id
+        - pull_requests
+      properties:
+        user_id:
+          type: string
+        pull_requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/PullRequestShort"
+    ReviewsStatsResponse:
+      type: object
+      properties:
+        stats:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserReviewStat"
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Проверка готовности сервиса
+      responses:
+        "200":
+          description: Сервис готов
+  /team/add:
+    post:
+      tags: [Teams]
+      summary: Создать команду с участниками (создаёт/обновляет пользователей)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Team"
+            example:
+              team_name: payments
+              members:
+                - user_id: u1
+                  username: Alice
+                  is_active: true
+                - user_id: u2
+                  username: Bob
+                  is_active: true
+      responses:
+        "201":
+          description: Команда создана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddTeamResponse"
+        "400":
+          description: Команда уже существует или ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /team/get:
+    get:
+      tags: [Teams]
+      summary: Получить команду с участниками
+      parameters:
+        - $ref: "#/components/parameters/TeamNameQuery"
+      responses:
+        "200":
+          description: Объект команды
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetTeamResponse"
+        "404":
+          description: Команда не найдена
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /users/setIsActive:
+    post:
+      tags: [Users]
+      summary: Установить флаг активности пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetIsActiveRequest"
+            example:
+              user_id: u2
+              is_active: false
+      responses:
+        "200":
+          description: Обновлённый пользователь
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetIsActiveResponse"
+        "400":
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /users/getReview:
+    get:
+      tags: [Users]
+      summary: Получить PR'ы, где пользователь назначен ревьювером
+      parameters:
+        - $ref: "#/components/parameters/UserIdQuery"
+      responses:
+        "200":
+          description: Список PR'ов пользователя
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsersReviewsResponse"
+        "404":
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pullRequest/create:
+    post:
+      tags: [PullRequests]
+      summary: Создать PR и автоматически назначить до 2 ревьюверов из команды автора
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePullRequestRequest"
+            example:
+              pull_request_id: pr-1001
+              pull_request_name: Add search
+              author_id: u1
+      responses:
+        "201":
+          description: PR создан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PullRequestResponse"
+        "400":
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Автор или команда не найдены
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: PR уже существует
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pullRequest/merge:
+    post:
+      tags: [PullRequests]
+      summary: Пометить PR как MERGED (идемпотентная операция)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergePullRequestRequest"
+            example:
+              pull_request_id: pr-1001
+      responses:
+        "200":
+          description: PR в состоянии MERGED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PullRequestResponse"
+        "400":
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: PR не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pullRequest/reassign:
+    post:
+      tags: [PullRequests]
+      summary: Переназначить конкретного ревьювера на другого из его команды
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReassignPullRequestRequest"
+            example:
+              pull_request_id: pr-1001
+              old_user_id: u2
+      responses:
+        "200":
+          description: Переназначение выполнено
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReassignPullRequestResponse"
+        "400":
+          description: Ошибка валидации
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: PR или пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Нарушение доменных правил переназначения
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                merged:
+                  summary: Нельзя менять после MERGED
+                  value:
+                    error:
+                      code: PR_MERGED
+                      message: pull request already merged
+                notAssigned:
+                  summary: Пользователь не был назначен ревьювером
+                  value:
+                    error:
+                      code: NOT_ASSIGNED
+                      message: reviewer is not assigned to this PR
+                noCandidate:
+                  summary: Нет доступных кандидатов
+                  value:
+                    error:
+                      code: NO_CANDIDATE
+                      message: no active replacement candidate in team
+  /pullRequest/stats/all:
+    get:
+      tags: [Stats]
+      summary: Количество всех ревью по пользователям
+      responses:
+        "200":
+          description: Агрегированная статистика
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewsStatsResponse"
+  /pullRequest/stats/open:
+    get:
+      tags: [Stats]
+      summary: Количество активных (OPEN) ревью по пользователям
+      responses:
+        "200":
+          description: Агрегированная статистика
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewsStatsResponse"
+  /pullRequest/stats/top:
+    get:
+      tags: [Stats]
+      summary: Топ-5 пользователей по общему количеству ревью
+      responses:
+        "200":
+          description: Агрегированная статистика
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewsStatsResponse"
+  /pullRequest/stats/top-open:
+    get:
+      tags: [Stats]
+      summary: Топ-5 пользователей по активным ревью
+      responses:
+        "200":
+          description: Агрегированная статистика
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewsStatsResponse"
